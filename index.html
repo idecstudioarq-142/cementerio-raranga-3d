@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cementerio de Raranga 3D</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Plano vivo: lienzo 3D a pantalla completa, rotulo arriba, capas como cinta de colores abajo (mismo lenguaje del visor Sidcay) */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --fg: #18222d; --muted: #5b6875; --line: #cfd6dd;
+  --accent: #1f4f8a; --chip: #f4f6f8; --sky1: #dfe7ef; --sky2: #f6f8fa;
+  --f-ui: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151c; --panel: #17202a; --fg: #e6ecf2; --muted: #9aa7b4; --line: #2b3744;
+  --accent: #7fb0ec; --chip: #1d2833; --sky1: #142030; --sky2: #0f151c; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f151c; --panel: #17202a; --fg: #e6ecf2; --muted: #9aa7b4; --line: #2b3744;
+  --accent: #7fb0ec; --chip: #1d2833; --sky1: #142030; --sky2: #0f151c; color-scheme: dark }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-ui); display: flex; flex-direction: column; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; background: var(--panel); border-bottom: 1px solid var(--line);
+  padding-block: calc(10px + env(safe-area-inset-top, 0px)) 10px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1 { font-size: 1rem; font-weight: 600; margin: 0; }
+.sub { font-family: var(--f-mono); font-size: .78rem; color: var(--muted); }
+#escena { position: relative; flex: 1 1 auto; min-height: 320px; background: linear-gradient(var(--sky1), var(--sky2)); }
+#lienzo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#estado { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-family: var(--f-mono); font-size: .85rem; color: var(--muted); background: var(--panel); border: 1px solid var(--line); padding: 8px 12px; border-radius: 6px; max-width: 80%; text-align: center; }
+.vistas { position: absolute; top: 10px; right: max(10px, env(safe-area-inset-right, 0px)); display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: calc(100% - 20px); }
+button { font: 500 .8rem var(--f-ui); color: var(--fg); background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 7px 10px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ayuda { position: absolute; left: max(10px, env(safe-area-inset-left, 0px)); bottom: 10px; font-size: .74rem; color: var(--muted); background: color-mix(in srgb, var(--panel) 85%, transparent); padding: 4px 8px; border-radius: 4px; }
+section.panel { background: var(--panel); border-top: 1px solid var(--line); padding-block: 10px calc(14px + env(safe-area-inset-bottom, 0px));
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); display: grid; gap: 10px; }
+.cinta { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.capa { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; background: var(--chip); }
+.capa .sw { width: 12px; height: 12px; border-radius: 3px; border: 1px solid rgba(0,0,0,.25); }
+.capa[aria-pressed="false"] { opacity: .45; }
+.capa[aria-pressed="false"] .sw { background: transparent !important; }
+dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px 16px; margin: 0; font-size: .82rem; }
+dt { color: var(--muted); font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; }
+dd { margin: 0; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.pie { font-size: .72rem; color: var(--muted); margin: 0; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Cementerio parroquial · San José de Raranga</h1>
+  <span class="sub" id="sub">Modelo BIM arquitectónico · Sigsig, Azuay</span>
+</header>
+<div id="escena">
+  <canvas id="lienzo" aria-label="Modelo 3D del cementerio"></canvas>
+  <div id="estado">Cargando modelo…</div>
+  <div class="vistas" role="group" aria-label="Vistas">
+    <button id="v-iso" type="button">Isométrica</button>
+    <button id="v-planta" type="button">Planta</button>
+    <button id="v-ingreso" type="button">Ingreso</button>
+    <button id="v-atrio" type="button">Atrio</button>
+  </div>
+  <div class="ayuda">Arrastra para girar · pellizca para acercar · dos dedos para mover</div>
+</div>
+<section class="panel">
+  <div class="cinta" id="capas" role="group" aria-label="Capas del modelo"></div>
+  <dl>
+    <div><dt>Nichos en bóvedas</dt><dd>304</dd></div>
+    <div><dt>Osarios</dt><dd>96</dd></div>
+    <div><dt>Columbarios</dt><dd>280</dd></div>
+    <div><dt>Capilla</dt><dd>44,53 m²</dd></div>
+    <div><dt>Ingreso</dt><dd>2 puertas corredizas</dd></div>
+  </dl>
+  <p class="pie" id="pie">Modelo de diseño: verificar en obra con las láminas A-01 a A-23. El visor se actualiza con cada cambio del modelo.</p>
+</section>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function () {
+  const lienzo = document.getElementById('lienzo'), escenaDiv = document.getElementById('escena'), estado = document.getElementById('estado');
+  const renderer = new THREE.WebGLRenderer({ canvas: lienzo, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 1500);
+  const controls = new THREE.OrbitControls(camera, lienzo);
+  controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = Math.PI * 0.495;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x7d8a6a, 0.9));
+  const sol = new THREE.DirectionalLight(0xffffff, 0.8); sol.position.set(-40, 70, 30); scene.add(sol);
+  const contra = new THREE.DirectionalLight(0xffffff, 0.25); contra.position.set(40, 30, -60); scene.add(contra);
+  const grupos = {};
+  function ajustar() { const w = escenaDiv.clientWidth, h = escenaDiv.clientHeight; renderer.setSize(w, h, false); camera.aspect = w / Math.max(h, 1); camera.updateProjectionMatrix(); }
+  window.addEventListener('resize', ajustar);
+  // ejes del proyecto: x = u, y = z (+2.69 = 0), z = -v
+  const VISTAS = {
+    iso:     { p: [-62, 46, 18],    t: [-3, 0, -28] },
+    planta:  { p: [-3, 95, -28.01], t: [-3, 0, -28] },
+    ingreso: { p: [-4.6, 1.65, -45], t: [-4.6, 0.8, -30] },
+    atrio:   { p: [-7.5, 1.7, -34.0], t: [0.5, 1.8, -26] }
+  };
+  function encuadrar() {   // isometrica y planta segun la caja de lo construido (sin terreno ni arboles)
+    const caja = new THREE.Box3();
+    Object.keys(grupos).forEach(k => { if (k !== 'TER' && k !== 'VEG') caja.expandByObject(grupos[k]); });
+    if (caja.isEmpty()) return;
+    const c = caja.getCenter(new THREE.Vector3()), s = caja.getSize(new THREE.Vector3()), r = Math.max(s.x, s.z);
+    const lejos = r / (2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2))) * (camera.aspect < 1 ? 1.25 : 0.72);
+    VISTAS.iso = { p: [c.x - lejos * 0.62, c.y + lejos * 0.62, c.z + lejos * 0.48], t: [c.x, c.y - s.y * 0.2, c.z] };
+    VISTAS.planta = { p: [c.x, c.y + lejos * 1.05, c.z + 0.01], t: [c.x, c.y, c.z] };
+  }
+  let anim = null;
+  function ir(nombre) {
+    const v = VISTAS[nombre], p0 = camera.position.clone(), t0 = controls.target.clone();
+    const p1 = new THREE.Vector3(...v.p), t1 = new THREE.Vector3(...v.t);
+    const reducido = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reducido) { camera.position.copy(p1); controls.target.copy(t1); return; }
+    const ini = performance.now(); anim = function (now) { const k = Math.min(1, (now - ini) / 800), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+      camera.position.lerpVectors(p0, p1, e); controls.target.lerpVectors(t0, t1, e); if (k >= 1) anim = null; };
+  }
+  ['iso', 'planta', 'ingreso', 'atrio'].forEach(n => document.getElementById('v-' + n).addEventListener('click', () => ir(n)));
+  async function binario() {
+    if (!('DecompressionStream' in window)) throw new Error('Este navegador es antiguo: actualízalo para ver el modelo.');
+    const r = await fetch('modelo.bin.gz'); if (!r.ok) throw new Error('No se pudo leer el modelo');
+    return await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  }
+  function arboles(datos, grupo) {
+    const A = datos.arboles; if (!A.length) return;
+    const tronco = new THREE.CylinderGeometry(0.5, 0.7, 1, 7); tronco.translate(0, 0.5, 0);
+    const copa = new THREE.IcosahedronGeometry(0.5, 1); copa.translate(0, 0.5, 0);
+    const mT = new THREE.InstancedMesh(tronco, new THREE.MeshStandardMaterial({ color: 0x6b4f36, roughness: 0.9 }), A.length);
+    const mC = new THREE.InstancedMesh(copa, new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.85, flatShading: true }), A.length);
+    const o = new THREE.Object3D(), c = new THREE.Color();
+    A.forEach((a, i) => {
+      const x = a[0] / 100, z = -a[1] / 100, y0 = a[2] / 100, h = Math.max(a[3] / 100, 0.3), dia = Math.max(a[4] / 100, 0.3);
+      const arbusto = h < 1.6, ht = arbusto ? 0.02 : h * 0.35;
+      o.position.set(x, y0, z); o.rotation.set(0, 0, 0); o.scale.set(Math.max(0.12, dia * 0.06), ht, Math.max(0.12, dia * 0.06)); o.updateMatrix(); mT.setMatrixAt(i, o.matrix);
+      o.position.set(x, y0 + ht * 0.85, z); o.scale.set(dia, h - ht * 0.85, dia); o.rotation.set(0, i * 1.7, 0); o.updateMatrix(); mC.setMatrixAt(i, o.matrix);
+      c.setHSL(0.27 + ((i * 37) % 9) / 200, 0.38, arbusto ? 0.40 : 0.33 + ((i * 13) % 7) / 100); mC.setColorAt(i, c);
+    });
+    grupo.add(mT); grupo.add(mC);
+  }
+  Promise.all([fetch('modelo.json').then(r => { if (!r.ok) throw new Error('No se pudo leer el modelo'); return r.json(); }), binario()]).then(([datos, buf]) => {
+    document.getElementById('sub').textContent = 'Modelo BIM arquitectónico · Sigsig, Azuay · actualizado ' + datos.generado;
+    const cinta = document.getElementById('capas');
+    datos.capas.forEach(cp => {
+      const grupo = new THREE.Group(); scene.add(grupo); grupos[cp.id] = grupo;
+      let muestra = null;
+      cp.partes.forEach(pt => {
+        if (cp.id === 'LUM' && pt.t > 0) return;   // la fuente de luz de las luminarias (globo translucido) no se dibuja
+        const pos = new Int16Array(buf, pt.p, pt.np), idx = new Uint16Array(buf, pt.i, pt.ni);
+        const f = new Float32Array(pos.length);
+        for (let i = 0; i < pos.length; i += 3) { f[i] = pos[i] / 100; f[i + 1] = pos[i + 2] / 100; f[i + 2] = -pos[i + 1] / 100; }
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(f, 3)); g.setIndex(new THREE.BufferAttribute(new Uint16Array(idx), 1)); g.computeVertexNormals();
+        const transp = pt.t > 0;
+        const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(pt.c).convertSRGBToLinear(), metalness: 0.05, roughness: 0.85, side: THREE.DoubleSide,
+          transparent: transp, opacity: transp ? Math.max(0.25, 1 - pt.t / 100) : 1, depthWrite: !transp });
+        grupo.add(new THREE.Mesh(g, m)); if (!muestra || pt.ni > muestra.ni) muestra = pt;
+      });
+      if (cp.id === 'VEG') arboles(datos, grupo);
+      grupo.visible = cp.visible;
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'capa'; b.setAttribute('aria-pressed', String(cp.visible));
+      b.innerHTML = '<span class="sw" style="background:' + (cp.id === 'VEG' ? '#5c8a3a' : (muestra ? muestra.c : '#999')) + '"></span>' + cp.nombre;
+      b.addEventListener('click', () => { grupo.visible = !grupo.visible; b.setAttribute('aria-pressed', String(grupo.visible)); });
+      cinta.appendChild(b);
+    });
+    estado.hidden = true; ajustar(); encuadrar(); ir('iso');
+  }).catch(err => { estado.textContent = err && err.message ? err.message : 'No se pudo cargar el modelo. Recarga la página.'; console.error(err); });
+  camera.position.set(-62, 46, 18); controls.target.set(-3, 0, -28); ajustar();
+  (function loop(now) { if (anim) anim(now); controls.update(); renderer.render(scene, camera); requestAnimationFrame(loop); })(performance.now());
+})();
+</script>
+</body>
+</html>
