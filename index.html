@@ -156,7 +156,8 @@ dd { margin: 0; font-family: var(--f-mono); font-variant-numeric: tabular-nums; 
         const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(f, 3)); g.setIndex(new THREE.BufferAttribute(new Uint16Array(idx), 1)); g.computeVertexNormals();
         const transp = pt.t > 0;
         const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(pt.c).convertSRGBToLinear(), metalness: 0.05, roughness: 0.85, side: THREE.DoubleSide,
-          transparent: transp, opacity: transp ? Math.max(0.25, 1 - pt.t / 100) : 1, depthWrite: !transp });
+          transparent: transp, opacity: transp ? Math.max(0.25, 1 - pt.t / 100) : 1, depthWrite: !transp,
+          polygonOffset: cp.id === 'ADQ', polygonOffsetFactor: -2, polygonOffsetUnits: -4 });   // el adoquin va a ras del piso: sin parpadeo
         grupo.add(new THREE.Mesh(g, m)); if (!muestra || pt.ni > muestra.ni) muestra = pt;
       });
       if (cp.id === 'VEG') arboles(datos, grupo);
